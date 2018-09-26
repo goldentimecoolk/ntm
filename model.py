@@ -59,7 +59,8 @@ class NTMOneShotLearningModel():
             args.output_dim = args.n_classes
         elif args.label_type == 'five_hot':
             args.output_dim = 25
-
+        
+        ### the args.seq_length here means time_steps or max_times.
         self.x_image = tf.placeholder(dtype=tf.float32,
                                       shape=[args.batch_size, args.seq_length, args.image_width * args.image_height])
         self.x_label = tf.placeholder(dtype=tf.float32,
@@ -70,7 +71,7 @@ class NTMOneShotLearningModel():
         if args.model == 'LSTM':
             def rnn_cell(rnn_size):
                 return tf.nn.rnn_cell.BasicLSTMCell(rnn_size)
-            cell = tf.nn.rnn_cell.MultiRNNCell([rnn_cell(args.rnn_size) for _ in range(args.rnn_num_layers)])
+            cell = tf.nn.rnn_cell.MultiRNNCell([rnn_cell(args.rnn_size) for _ in range(args.rnn_num_layers)])  ### every cell has args.rnn_num_layers layers.
         elif args.model == 'NTM':
             import ntm.ntm_cell as ntm_cell
             cell = ntm_cell.NTMCell(args.rnn_size, args.memory_size, args.memory_vector_dim,
@@ -91,7 +92,7 @@ class NTMOneShotLearningModel():
         self.state_list = [state]   # For debugging
         self.o = []
         for t in range(args.seq_length):
-            output, state = cell(tf.concat([self.x_image[:, t, :], self.x_label[:, t, :]], axis=1), state)
+            output, state = cell(tf.concat([self.x_image[:, t, :], self.x_label[:, t, :]], axis=1), state)  ### x_label[t-1]?
             # output, state = cell(self.y[:, t, :], state)
             with tf.variable_scope("o2o", reuse=(t > 0)):
                 o2o_w = tf.get_variable('o2o_w', [output.get_shape()[1], args.output_dim],
