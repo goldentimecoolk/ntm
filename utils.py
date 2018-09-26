@@ -39,6 +39,8 @@ class OmniglotDataLoader:
     def __init__(self, data_dir='./data', image_size=(20, 20), n_train_classses=1200, n_test_classes=423):
         self.data = []
         self.image_size = image_size
+        ### dataset consists of two folders in official omniglot release: 
+        ### ./omniglot/python/images_background ./omniglot/python/images_evaluation
         for dirname, subdirname, filelist in os.walk(data_dir):
             if filelist:
                 self.data.append(
