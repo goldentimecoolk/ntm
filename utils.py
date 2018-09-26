@@ -52,7 +52,7 @@ class OmniglotDataLoader:
                     # [io.imread(dirname + '/' + filename).astype(np.float32) / 255 for filename in filelist]
                     [Image.open(dirname + '/' + filename).copy() for filename in filelist]
                 )
-
+        ### data is a 2-dim list. the first dim is class_iter and the second is item_iter_per_class(num=20).
         self.train_data = self.data[:n_train_classses]
         self.test_data = self.data[-n_test_classes:]
 
