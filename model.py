@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
+## the MANN could be abstracted as normal CNN, their functions are similar. but the implementations are distinctive. see source code for this point.
 
 class NTMCopyModel():
     def __init__(self, args, seq_length, reuse=False):
