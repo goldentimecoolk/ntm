@@ -68,7 +68,10 @@ class OmniglotDataLoader:
         elif type == 'test':
             data = self.test_data\
         ### randomly choose n_classes(default=5) classes in n_train_classses(or n_test_classses) classes.
+        ### classes has shape [batch_size,n_classes], each item is a number in range(n_train/test_classses)
         classes = [np.random.choice(range(len(data)), replace=False, size=n_classes) for _ in range(batch_size)]
+        ### seq has shape [batch_size,seq_length], which is different from shape of classes. so sample in range(n_classes) is the key.
+        ### each item is not the class itself but a index of classes, so seq is a index array.
         if sample_strategy == 'random':         # #(sample) per class may not be equal (sec 7)
             seq = np.random.randint(0, n_classes, [batch_size, seq_length])
         elif sample_strategy == 'uniform':      # #(sample) per class are equal
@@ -77,13 +80,16 @@ class OmniglotDataLoader:
             for i in range(batch_size):
                 np.random.shuffle(seq[i, :])
         self.rand_rotate_init(n_classes, batch_size)
+        ### apparently classes[i][j] is real class of used dataset. data[classes[i][j]] addresses the specific class.
+        ### the second [np.random....] means sampling from the fixed class.
+        ### seq_pic has shape [batch_size, seq_length, image_shape]
         seq_pic = [[self.augment(data[classes[i][j]][np.random.randint(0, len(data[classes[i][j]]))],
                                  batch=i, c=j,
                                  only_resize=not augment)
                    for j in seq[i, :]]
                    for i in range(batch_size)]
         if label_type == 'one_hot':
-            seq_encoded = one_hot_encode(seq, n_classes)
+            seq_encoded = one_hot_encode(seq, n_classes)     ### [batch_size,seq_length,n_classes]
             seq_encoded_shifted = np.concatenate(
                 [np.zeros(shape=[batch_size, 1, n_classes]), seq_encoded[:, :-1, :]], axis=1
             )
@@ -96,6 +102,10 @@ class OmniglotDataLoader:
             seq_encoded_shifted = np.concatenate(
                 [np.zeros(shape=[batch_size, 1, 25]), seq_encoded[:, :-1, :]], axis=1
             )
+        ### because seq_pic is indexed by items of seq. (the same items in seq links the same class in dataset)
+        ### seq is identified with seq_encoded. 
+        ### seq_encoded_shifted shift label one step later, coinciding with algorithms proposed in MANN.
+        ### so we replace original class (to make it concise) with seq in an indirect way.
         return seq_pic, seq_encoded_shifted, seq_encoded
 
     def rand_rotate_init(self, n_classes, batch_size):
