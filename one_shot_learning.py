@@ -117,6 +117,8 @@ def test(args):
                                                           augment=args.augment,
                                                           label_type=args.label_type)
             feed_dict = {model.x_image: x_image, model.x_label: x_label, model.y: y}
+            ### notice the op tobe run here, mainly for inference.
+            ### in train stage, the op is train_op, include the update of params.
             output, learning_loss = sess.run([model.o, model.learning_loss], feed_dict=feed_dict)
             y_list.append(y)
             output_list.append(output)
