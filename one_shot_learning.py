@@ -112,6 +112,9 @@ def test(args):
         output_list = []
         loss_list = []
         for b in range(args.test_batch_num):
+            ### Question: in test stage, the input identifies with the one in train stage, concat previous label 
+            ### in the last time_dim of image. What should we concat in real application. or Does this make different
+            ### when we randomly concat a label following image?
             x_image, x_label, y = data_loader.fetch_batch(args.n_classes, args.batch_size, args.seq_length,
                                                           type='test',
                                                           augment=args.augment,
