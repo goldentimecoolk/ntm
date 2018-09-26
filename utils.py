@@ -65,7 +65,7 @@ class OmniglotDataLoader:
             data = self.train_data
         elif type == 'test':
             data = self.test_data\
-        ### randomly choose 'classes'(num,default=5) classes in n_train_classses(or n_test_classses) classes.
+        ### randomly choose n_classes(default=5) classes in n_train_classses(or n_test_classses) classes.
         classes = [np.random.choice(range(len(data)), replace=False, size=n_classes) for _ in range(batch_size)]
         if sample_strategy == 'random':         # #(sample) per class may not be equal (sec 7)
             seq = np.random.randint(0, n_classes, [batch_size, seq_length])
