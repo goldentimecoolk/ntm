@@ -60,7 +60,9 @@ class NTMOneShotLearningModel():
         elif args.label_type == 'five_hot':
             args.output_dim = 25
         
-        ### the args.seq_length here means time_steps or max_times.
+        ### the args.seq_length here means time_steps or max_times. 
+        ### x_label is shifted and will be combined with x_image as input to cell.
+        ### y is not shifted and will be used as label in checking for loss.
         self.x_image = tf.placeholder(dtype=tf.float32,
                                       shape=[args.batch_size, args.seq_length, args.image_width * args.image_height])
         self.x_label = tf.placeholder(dtype=tf.float32,
