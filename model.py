@@ -96,6 +96,7 @@ class NTMOneShotLearningModel():
         self.o = []
         for t in range(args.seq_length):
             ### x_label and x_image have the same step t, but x_lable is actually shifted one step later than x_image. more implementation details see utils.py fetch part.
+            ### concat [batch_size,width*height] and [batcch_size,output_dim] together to form the input x.
             output, state = cell(tf.concat([self.x_image[:, t, :], self.x_label[:, t, :]], axis=1), state)  
             # output, state = cell(self.y[:, t, :], state)
             with tf.variable_scope("o2o", reuse=(t > 0)):
