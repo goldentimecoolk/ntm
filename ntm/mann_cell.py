@@ -5,15 +5,17 @@ class MANNCell():
     def __init__(self, rnn_size, memory_size, memory_vector_dim, head_num, gamma=0.95,
                  reuse=False, k_strategy='separate'):
         self.rnn_size = rnn_size
-        self.memory_size = memory_size
-        self.memory_vector_dim = memory_vector_dim
-        self.head_num = head_num                                    # #(read head) == #(write head)
+        self.memory_size = memory_size                                   ### Number of memory locations (N)
+        self.memory_vector_dim = memory_vector_dim                       ### The vector size at each location (M)
+        self.head_num = head_num                                         # #(read head) == #(write head)
         self.reuse = reuse
-        self.controller = tf.nn.rnn_cell.BasicLSTMCell(self.rnn_size)
+        self.controller = tf.nn.rnn_cell.BasicLSTMCell(self.rnn_size)    ### use LSTM as controller
         self.step = 0
         self.gamma = gamma
         self.k_strategy = k_strategy
 
+    ### output, state = cell(tf.concat([self.x_image[:, t, :], self.x_label[:, t, :]], axis=1), state)
+    ### x = tf.concat([self.x_image[:, t, :], self.x_label[:, t, :]], axis=1)
     def __call__(self, x, prev_state):
         prev_read_vector_list = prev_state['read_vector_list']      # read vector (the content that is read out, length = memory_vector_dim)
         prev_controller_state = prev_state['controller_state']      # state of controller (LSTM hidden state)
