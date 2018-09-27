@@ -49,10 +49,12 @@ class MANNCell():
         head_parameter_list = tf.split(parameters, self.head_num, axis=1)   ### split parameters into head_parameters [head_num,batch_size,M+1]
         print(len(head_parameter_list))                                     ### split=S along dim(=N), return [S,[...,N/S,...]]
 
+        ### loop1: LSTM itself:
         ### image, shifted_label, read_vector_list, controller_state
         ### A: controller_output -> k, alpha
         ### B: controller_state
         
+        ### loop2: MEMORY conduction / update:
         ### init2: prev_M, w_u, w_r + (k, alpha)
         ### w_u -> w_lu 
         ### k, prev_M -> w_r ->|
