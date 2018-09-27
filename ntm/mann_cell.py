@@ -17,11 +17,13 @@ class MANNCell():
     ### output, state = cell(tf.concat([self.x_image[:, t, :], self.x_label[:, t, :]], axis=1), state)
     ### x = tf.concat([self.x_image[:, t, :], self.x_label[:, t, :]], axis=1)
     def __call__(self, x, prev_state):
+    ### only compute one time step.
         prev_read_vector_list = prev_state['read_vector_list']      # read vector (the content that is read out, length = memory_vector_dim)
         prev_controller_state = prev_state['controller_state']      # state of controller (LSTM hidden state)
 
         # x + prev_read_vector -> controller (RNN) -> controller_output
 
+        ### controller_input has batch_size items, each item is (imagew*h + label + prev_read_vector_list)
         controller_input = tf.concat([x] + prev_read_vector_list, axis=1)
         with tf.variable_scope('controller', reuse=self.reuse):
             controller_output, controller_state = self.controller(controller_input, prev_controller_state)
@@ -30,8 +32,8 @@ class MANNCell():
         #                       -> a (dim = memory_vector_dim, add vector, only when k_strategy='separate')
         #                       -> alpha (scalar, combination of w_r and w_lu)
 
-        if self.k_strategy == 'summary':
-            num_parameters_per_head = self.memory_vector_dim + 1
+        if self.k_strategy == 'summary':                                   ### M+1
+            num_parameters_per_head = self.memory_vector_dim + 1           ### sig_alpha, here we can't determine what '+1' means, look at line62, 65.
         elif self.k_strategy == 'separate':
             num_parameters_per_head = self.memory_vector_dim * 2 + 1
         total_parameter_num = num_parameters_per_head * self.head_num
@@ -40,8 +42,8 @@ class MANNCell():
                                     initializer=tf.random_uniform_initializer(minval=-0.1, maxval=0.1))
             o2p_b = tf.get_variable('o2p_b', [total_parameter_num],
                                     initializer=tf.random_uniform_initializer(minval=-0.1, maxval=0.1))
-            parameters = tf.nn.xw_plus_b(controller_output, o2p_w, o2p_b)
-        head_parameter_list = tf.split(parameters, self.head_num, axis=1)
+            parameters = tf.nn.xw_plus_b(controller_output, o2p_w, o2p_b)   ### [batch_size,total_parameter_num]
+        head_parameter_list = tf.split(parameters, self.head_num, axis=1)   ### split parameters into head_parameters
 
         # k, prev_M -> w_r
         # alpha, prev_w_r, prev_w_lu -> w_w
@@ -55,7 +57,7 @@ class MANNCell():
         k_list = []
         a_list = []
         # p_list = []   # For debugging
-        for i, head_parameter in enumerate(head_parameter_list):
+        for i, head_parameter in enumerate(head_parameter_list):            ### the outmost loop, i.e. iteration along batch_size.
             with tf.variable_scope('addressing_head_%d' % i):
                 k = tf.tanh(head_parameter[:, 0:self.memory_vector_dim], name='k')
                 if self.k_strategy == 'separate':
@@ -100,13 +102,13 @@ class MANNCell():
 
         NTM_output = tf.concat([controller_output] + read_vector_list, axis=1)
 
-        state = {
+        state = {                                       ### see the definition of initial state to figure out tensors' shape.
             'controller_state': controller_state,
-            'read_vector_list': read_vector_list,
-            'w_r_list': w_r_list,
+            'read_vector_list': read_vector_list,       ### [batch_size, memory_vector_dim, head_num=1]
+            'w_r_list': w_r_list,                       ### [batch_size, memory_size, head_num=1]
             'w_w_list': w_w_list,
-            'w_u': w_u,
-            'M': M,
+            'w_u': w_u,                                 ### [batch_size, memory_size]
+            'M': M,                                     ### [batch_size, memory_size, memory_vector_dim]
         }
 
         self.step += 1
@@ -145,7 +147,7 @@ class MANNCell():
 
     def zero_state(self, batch_size, dtype):
         one_hot_weight_vector = np.zeros([batch_size, self.memory_size])
-        one_hot_weight_vector[..., 0] = 1
+        one_hot_weight_vector[..., 0] = 1                                            ### [[1,0,0,...],[1,0,0,...],...]
         one_hot_weight_vector = tf.constant(one_hot_weight_vector, dtype=tf.float32)
         with tf.variable_scope('init', reuse=self.reuse):
             state = {
