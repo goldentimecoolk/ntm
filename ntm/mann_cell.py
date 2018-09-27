@@ -23,12 +23,13 @@ class MANNCell():
 
         # x + prev_read_vector -> controller (RNN) -> controller_output
 
-        ### controller_input has batch_size items, each item is (imagew*h + label + prev_read_vector_list)
+        ### controller_input has batch_size items, each item is (imagew*h+n_classes+prev_read_vector_list)
         ### i.e. controller_input includes the information of image, label and read_vector_list.
         controller_input = tf.concat([x] + prev_read_vector_list, axis=1)
         with tf.variable_scope('controller', reuse=self.reuse):
             ### new_h, new_state = self.controller(inputs, state) 
             ### inputs: [batch_size, input_size]  state: 2*[batch_size, num_units] init by LSTM's member function.
+            ### controller_output: [batch_size, ]
             controller_output, controller_state = self.controller(controller_input, prev_controller_state)
 
         # controller_output     -> k (dim = memory_vector_dim, compared to each vector in M)
@@ -50,17 +51,18 @@ class MANNCell():
         print(len(head_parameter_list))                                     ### split=S along dim(=N), return [S,[...,N/S,...]]
 
         ### loop1: LSTM itself:
-        ### image, shifted_label, read_vector_list, controller_state
-        ### A: controller_output -> k, alpha
-        ### B: controller_state
+        ### controller_input (image, shifted_label, read_vector_list), controller_state
+        ### output_A: controller_output -> (k, alpha) * head_num
+        ### output_B: controller_state |-> S1 (LSTM update)
         
         ### loop2: MEMORY conduction / update:
-        ### init2: prev_M, w_u, w_r + (k, alpha)
-        ### w_u -> w_lu 
-        ### k, prev_M -> w_r ->|
-        ### alpha, w_r, w_lu -> w_w ->|
-        ### w_u, w_r, w_w -> w_u ->|
-        ### prev_M, w_w, k -> M ->|  (writing, update M)
+        ### init2: (prev_) M, w_u, w_r + (k, alpha)
+        ### prev_w_u -> prev_w_lu 
+        ### k, prev_M -> w_r |-> S2
+        ### alpha, prev_w_r, prev_w_u -> w_w |-> S3
+        ### prev_w_u, w_r, w_w -> w_u |-> S4
+        ### prev_M, prev_w_u, w_w, k -> M |-> S5  (writing, update M)
+        ### w_r, M -> read_vector |-> S6
 
         prev_w_r_list = prev_state['w_r_list']      # vector of weightings (blurred address) over locations
         prev_M = prev_state['M']
