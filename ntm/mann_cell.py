@@ -7,7 +7,7 @@ class MANNCell():
         self.rnn_size = rnn_size
         self.memory_size = memory_size                                   ### Number of memory locations (N)
         self.memory_vector_dim = memory_vector_dim                       ### The vector size at each location (M)
-        self.head_num = head_num                                         # #(read head) == #(write head)
+        self.head_num = head_num                                         # #(read head) == #(write head)  ### this num is 4 by default. The given value 1 in README.md is just a representation.
         self.reuse = reuse
         self.controller = tf.nn.rnn_cell.BasicLSTMCell(self.rnn_size)    ### use LSTM as controller
         self.step = 0
@@ -24,15 +24,18 @@ class MANNCell():
         # x + prev_read_vector -> controller (RNN) -> controller_output
 
         ### controller_input has batch_size items, each item is (imagew*h + label + prev_read_vector_list)
+        ### i.e. controller_input includes the information of image, label and read_vector_list.
         controller_input = tf.concat([x] + prev_read_vector_list, axis=1)
         with tf.variable_scope('controller', reuse=self.reuse):
+            ### new_h, new_state = self.controller(inputs, state) 
+            ### inputs: [batch_size, input_size]  state: 2*[batch_size, num_units] init by LSTM's member function.
             controller_output, controller_state = self.controller(controller_input, prev_controller_state)
 
         # controller_output     -> k (dim = memory_vector_dim, compared to each vector in M)
         #                       -> a (dim = memory_vector_dim, add vector, only when k_strategy='separate')
         #                       -> alpha (scalar, combination of w_r and w_lu)
 
-        if self.k_strategy == 'summary':                                   ### M+1
+        if self.k_strategy == 'summary':
             num_parameters_per_head = self.memory_vector_dim + 1           ### sig_alpha, here we can't determine what '+1' means, look at line62, 65.
         elif self.k_strategy == 'separate':
             num_parameters_per_head = self.memory_vector_dim * 2 + 1
@@ -42,11 +45,20 @@ class MANNCell():
                                     initializer=tf.random_uniform_initializer(minval=-0.1, maxval=0.1))
             o2p_b = tf.get_variable('o2p_b', [total_parameter_num],
                                     initializer=tf.random_uniform_initializer(minval=-0.1, maxval=0.1))
-            parameters = tf.nn.xw_plus_b(controller_output, o2p_w, o2p_b)   ### [batch_size,total_parameter_num]
-        head_parameter_list = tf.split(parameters, self.head_num, axis=1)   ### split parameters into head_parameters
+            parameters = tf.nn.xw_plus_b(controller_output, o2p_w, o2p_b)   ### [batch_size,total_parameter_num (M+1)*head_num]
+        head_parameter_list = tf.split(parameters, self.head_num, axis=1)   ### split parameters into head_parameters [head_num,batch_size,M+1]
+        print(len(head_parameter_list))                                     ### split=S along dim(=N), return [S,[...,N/S,...]]
 
-        # k, prev_M -> w_r
-        # alpha, prev_w_r, prev_w_lu -> w_w
+        ### image, shifted_label, read_vector_list, controller_state
+        ### A: controller_output -> k, alpha
+        ### B: controller_state
+        
+        ### init2: prev_M, w_u, w_r + (k, alpha)
+        ### w_u -> w_lu 
+        ### k, prev_M -> w_r ->|
+        ### alpha, w_r, w_lu -> w_w ->|
+        ### w_u, w_r, w_w -> w_u ->|
+        ### prev_M, w_w, k -> M ->|  (writing, update M)
 
         prev_w_r_list = prev_state['w_r_list']      # vector of weightings (blurred address) over locations
         prev_M = prev_state['M']
@@ -57,15 +69,15 @@ class MANNCell():
         k_list = []
         a_list = []
         # p_list = []   # For debugging
-        for i, head_parameter in enumerate(head_parameter_list):            ### the outmost loop, i.e. iteration along batch_size.
+        for i, head_parameter in enumerate(head_parameter_list):            ### the outmost loop, i.e. iteration along head_num.
             with tf.variable_scope('addressing_head_%d' % i):
                 k = tf.tanh(head_parameter[:, 0:self.memory_vector_dim], name='k')
                 if self.k_strategy == 'separate':
                     a = tf.tanh(head_parameter[:, self.memory_vector_dim:self.memory_vector_dim * 2], name='a')
                 sig_alpha = tf.sigmoid(head_parameter[:, -1:], name='sig_alpha')
-                w_r = self.read_head_addressing(k, prev_M)
+                w_r = self.read_head_addressing(k, prev_M)                  ### [B,M]*[B,N,M] -> [B,N] (memory_size)
                 w_w = self.write_head_addressing(sig_alpha, prev_w_r_list[i], prev_w_lu)
-            w_r_list.append(w_r)
+            w_r_list.append(w_r)                                            ### [head_num, batch_size, memory_size]
             w_w_list.append(w_w)
             k_list.append(k)
             if self.k_strategy == 'separate':
@@ -82,8 +94,8 @@ class MANNCell():
 
         M = M_
         with tf.variable_scope('writing'):
-            for i in range(self.head_num):
-                w = tf.expand_dims(w_w_list[i], axis=2)
+            for i in range(self.head_num):                                  ### conduct write ops for 'head_num' times.
+                w = tf.expand_dims(w_w_list[i], axis=2)                     ### update memory for 'head_num' times and melt them toegether.
                 if self.k_strategy == 'summary':
                     k = tf.expand_dims(k_list[i], axis=1)
                 elif self.k_strategy == 'separate':
@@ -94,18 +106,18 @@ class MANNCell():
 
         read_vector_list = []
         with tf.variable_scope('reading'):
-            for i in range(self.head_num):
+            for i in range(self.head_num):                                  ### conduct write ops for 'head_num' times.
                 read_vector = tf.reduce_sum(tf.expand_dims(w_r_list[i], dim=2) * M, axis=1)
-                read_vector_list.append(read_vector)
+                read_vector_list.append(read_vector)                        ### store the read content seperately.
 
         # controller_output -> NTM output
 
         NTM_output = tf.concat([controller_output] + read_vector_list, axis=1)
 
         state = {                                       ### see the definition of initial state to figure out tensors' shape.
-            'controller_state': controller_state,
-            'read_vector_list': read_vector_list,       ### [batch_size, memory_vector_dim, head_num=1]
-            'w_r_list': w_r_list,                       ### [batch_size, memory_size, head_num=1]
+            'controller_state': controller_state,       ### self.controller.zero_state(batch_size, dtype), init by LSTM's init funciton.
+            'read_vector_list': read_vector_list,       ### [head_num=4, batch_size, memory_vector_dim]
+            'w_r_list': w_r_list,                       ### [head_num=4, batch_size, memory_size]
             'w_w_list': w_w_list,
             'w_u': w_u,                                 ### [batch_size, memory_size]
             'M': M,                                     ### [batch_size, memory_size, memory_vector_dim]
